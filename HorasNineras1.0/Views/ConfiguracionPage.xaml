@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HorasNiñeras1._0.ConfiguracionPage"
+             Title="Configuración">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="20">
+
+            <!-- SECCIÓN: APARIENCIA -->
+            <Border StrokeShape="RoundRectangle 12" Padding="15">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="Apariencia y Tema" 
+                           FontSize="18" 
+                           FontAttributes="Bold" 
+                           TextColor="{AppThemeBinding Light=#1F4E79, Dark=#64B5F6}"/>
+
+                    <Grid ColumnDefinitions="*, Auto" VerticalOptions="Center">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="Tema de la Aplicación" FontSize="16" FontAttributes="Bold" />
+                            <Label Text="Elige el aspecto visual de las pantallas" FontSize="12" Opacity="0.7" />
+                        </VerticalStackLayout>
+
+                        <Picker x:Name="PickerTema" 
+                                Grid.Column="1" 
+                                WidthRequest="140" 
+                                SelectedIndexChanged="OnTemaChanged">
+                            <Picker.Items>
+                                <x:String>Sistema</x:String>
+                                <x:String>Claro</x:String>
+                                <x:String>Oscuro</x:String>
+                            </Picker.Items>
+                        </Picker>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- SECCIÓN: RECORDATORIOS / ALERTAS -->
+            <Border StrokeShape="RoundRectangle 12" Padding="15">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="Recordatorio de Registro" 
+                           FontSize="18" 
+                           FontAttributes="Bold" 
+                           TextColor="{AppThemeBinding Light=#1F4E79, Dark=#64B5F6}"/>
+
+                    <!-- Activar / Desactivar -->
+                    <Grid ColumnDefinitions="*, Auto" VerticalOptions="Center">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="Activar Alerta Diaria" FontSize="16" FontAttributes="Bold" />
+                            <Label Text="Te avisa si olvidaste cargar registros" FontSize="12" Opacity="0.7" />
+                        </VerticalStackLayout>
+                        <Switch x:Name="SwitchAlerta" Grid.Column="1" Toggled="OnAlertaToggled" />
+                    </Grid>
+
+                    <!-- Configuración de Horario y Días -->
+                    <VerticalStackLayout x:Name="PanelAlertaDetalle" Spacing="15" IsVisible="False">
+
+                        <!-- Hora de la alerta -->
+                        <Grid ColumnDefinitions="*, Auto" VerticalOptions="Center">
+                            <Label Text="Hora del recordatorio:" FontSize="15" VerticalOptions="Center" />
+                            <TimePicker x:Name="TpHoraAlerta" Grid.Column="1" Format="HH:mm" PropertyChanged="OnHoraAlertaChanged"/>
+                        </Grid>
+
+                        <Label Text="Días de la semana:" FontSize="15" FontAttributes="Bold" />
+
+                        <!-- Selección de días corregida -->
+                        <FlexLayout Wrap="Wrap" JustifyContent="SpaceBetween" AlignItems="Center">
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkLunes" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Lun" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkMartes" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Mar" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkMiercoles" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Mié" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkJueves" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Jue" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkViernes" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Vie" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkSabado" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Sáb" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout Spacing="3">
+                                <CheckBox x:Name="ChkDomingo" CheckedChanged="OnDiaCheckedChanged"/>
+                                <Label Text="Dom" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                        </FlexLayout>
+
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- SECCIÓN: INFORMACIÓN -->
+            <Border StrokeShape="RoundRectangle 12" Padding="15">
+                <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
+                    <Label Text="JulioC# Inc." FontSize="16" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    <Label Text="Versión 1.0" FontSize="12" Opacity="0.6" HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

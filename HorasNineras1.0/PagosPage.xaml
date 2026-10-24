@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HorasNiñeras1._0.PagosPage"
+             Title="Gestión de Pagos">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <!-- ENCABEZADO Y BOTÓN VOLVER -->
+            <Grid ColumnDefinitions="*, Auto" VerticalOptions="Center">
+                <VerticalStackLayout Grid.Column="0">
+                    <Label x:Name="LblTituloNinera" Text="Pagos de Niñera" FontSize="20" FontAttributes="Bold" TextColor="Navy"/>
+                    <Label Text="Historial de liquidaciones y estado de cuenta" FontSize="12" TextColor="Gray"/>
+                </VerticalStackLayout>
+
+                <Button Grid.Column="1" 
+                        Text="📄 Exportar PDF Pagos" 
+                        Clicked="OnExportarPdfPagosClicked" 
+                        BackgroundColor="DarkGreen" 
+                        TextColor="White"
+                        FontSize="12"/>
+            </Grid>
+
+            <BoxView HeightRequest="1" Color="Gray" Margin="0,5"/>
+
+            <!-- CONTENEDOR DE TARJETAS DE PAGO -->
+            <VerticalStackLayout x:Name="ContainerPagos" Spacing="10">
+                <!-- Se cargan dinámicamente -->
+            </VerticalStackLayout>
+
+            <Button Text="⬅️ Volver a la Pantalla Principal" 
+                    Clicked="OnVolverClicked" 
+                    BackgroundColor="DarkSlateGray" 
+                    TextColor="White" 
+                    Margin="0,20,0,0"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

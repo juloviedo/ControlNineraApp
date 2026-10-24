@@ -1,0 +1,488 @@
+﻿using ControlNineras.Services;
+using HorasNiñeras1._0.Models;
+
+
+namespace HorasNiñeras1._0;
+
+public partial class MainPage : ContentPage
+{
+    private readonly DatabaseService _dbService;
+    private Ninera _nineraSeleccionada;
+
+    /// <summary>
+    /// Constructor principal de la pantalla.
+    /// </summary>
+    public MainPage()
+    {
+        InitializeComponent();
+        _dbService = new DatabaseService();
+    }
+
+    /// <summary>
+    /// Evento del ciclo de vida que se ejecuta cuando la pantalla aparece.
+    /// Carga el listado de niñeras y los registros del mes actual.
+    /// </summary>
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await CargarNineras();
+        await CargarRegistrosMes();
+    }
+
+    /// <summary>
+    /// Consulta la base de datos y llena el desplegable (Picker) con las niñeras registradas.
+    /// </summary>
+    private async Task CargarNineras()
+    {
+        var lista = await _dbService.ObtenerNinerasAsync();
+        PickerNinera.ItemsSource = lista;
+    }
+
+    /// <summary>
+    /// Se dispara cuando el usuario selecciona una niñera del desplegable.
+    /// </summary>
+    private async void OnNineraSelected(object sender, EventArgs e)
+    {
+        _nineraSeleccionada = PickerNinera.SelectedItem as Ninera;
+        if (_nineraSeleccionada != null)
+        {
+            TxtValorHora.Text = _nineraSeleccionada.ValorHora.ToString("F0");
+            await CargarRegistrosMes();
+        }
+    }
+
+    /// <summary>
+    /// Habilita o deshabilita los controles de hora de ingreso/egreso según el CheckBox.
+    /// </summary>
+    private void OnSoloComentarioChanged(object sender, CheckedChangedEventArgs e)
+    {
+        TpHoraIngreso.IsEnabled = !e.Value;
+        TpHoraEgreso.IsEnabled = !e.Value;
+    }
+
+    /// <summary>
+    /// Guarda o reemplaza un registro de horas/comentario para la niñera seleccionada.
+    /// </summary>
+    private async void OnGuardarRegistroClicked(object sender, EventArgs e)
+    {
+        if (_nineraSeleccionada == null)
+        {
+            await DisplayAlert("Atención", "Por favor seleccione una niñera.", "OK");
+            return;
+        }
+
+        // Determinar la tarifa a aplicar (si se editó el campo en pantalla o se mantiene la de la niñera)
+        decimal tarifaAUsar = _nineraSeleccionada.ValorHora;
+        if (decimal.TryParse(TxtValorHora.Text, out decimal valorIngresado))
+        {
+            tarifaAUsar = valorIngresado;
+            if (valorIngresado != _nineraSeleccionada.ValorHora)
+            {
+                _nineraSeleccionada.ValorHora = valorIngresado;
+                await _dbService.GuardarNineraAsync(_nineraSeleccionada);
+            }
+        }
+
+        DateTime fechaRegistro = DpFecha.Date ?? DateTime.Today;
+        bool esSoloComentario = ChkSoloComentario.IsChecked;
+        TimeSpan? ingresoNuevo = esSoloComentario ? null : TpHoraIngreso.Time;
+        TimeSpan? egresoNuevo = esSoloComentario ? null : TpHoraEgreso.Time;
+
+        int idExistente = 0;
+
+        // --- VALIDACIÓN DE HORARIOS SUPERPUESTOS Y DUPLICADOS ---
+        var registrosDelDia = await _dbService.ObtenerRegistrosPorNineraYFechaAsync(_nineraSeleccionada.Id, fechaRegistro, fechaRegistro);
+
+        if (registrosDelDia != null && registrosDelDia.Count > 0)
+        {
+            if (!esSoloComentario && ingresoNuevo.HasValue && egresoNuevo.HasValue)
+            {
+                // Buscar si alguno de los registros guardados ese día se cruza con las nuevas horas
+                var registroSuperpuesto = registrosDelDia.FirstOrDefault(r =>
+                    !r.EsSoloComentario &&
+                    r.HoraIngreso.HasValue &&
+                    r.HoraEgreso.HasValue &&
+                    ingresoNuevo.Value < r.HoraEgreso.Value &&
+                    egresoNuevo.Value > r.HoraIngreso.Value
+                );
+
+                if (registroSuperpuesto != null)
+                {
+                    bool confirmar = await DisplayAlert("Horario superpuesto",
+                        $"Ya existe un turno registrado para {_nineraSeleccionada.Nombre} que se cruza con este horario ({registroSuperpuesto.HoraIngreso:hh\\:mm} - {registroSuperpuesto.HoraEgreso:hh\\:mm}).\n\n¿Desea reemplazar ese turno con los nuevos datos?",
+                        "Sí, reemplazar", "Cancelar");
+
+                    if (!confirmar) return; // El usuario canceló
+
+                    idExistente = registroSuperpuesto.Id; // Reemplazará solo el turno que colisiona
+                }
+            }
+        }
+
+        var nuevoRegistro = new RegistroHorario
+        {
+            Id = idExistente, // 0 creará un nuevo registro; si colisionaba con uno, lo reemplazará
+            NineraId = _nineraSeleccionada.Id,
+            Fecha = fechaRegistro,
+            EsSoloComentario = esSoloComentario,
+            Comentario = TxtComentario.Text,
+            HoraIngreso = ingresoNuevo,
+            HoraEgreso = egresoNuevo,
+            ValorHoraAplicado = tarifaAUsar // Congela la tarifa actual para este día
+        };
+
+        await _dbService.GuardarRegistroAsync(nuevoRegistro);
+        await DisplayAlert("Éxito", "El registro se guardó correctamente.", "OK");
+
+        // Limpiar formulario y refrescar la lista de registros
+        TxtComentario.Text = string.Empty;
+        ChkSoloComentario.IsChecked = false;
+        await CargarRegistrosMes();
+    }
+
+    /// <summary>
+    /// Consulta el mes/año deseado, genera el informe PDF de horas trabajadas 
+    /// y ofrece registrar la liquidación pendiente.
+    /// </summary>
+    private async void OnGenerarPdfClicked(object sender, EventArgs e)
+    {
+        if (_nineraSeleccionada == null)
+        {
+            await DisplayAlert("Atención", "Seleccione una niñera para obtener el informe.", "OK");
+            return;
+        }
+
+        // 1. Pedir Mes y Año
+        string mesStr = await DisplayPromptAsync("Consultar Informe", "Ingrese el mes (1-12):", initialValue: DateTime.Today.Month.ToString(), keyboard: Keyboard.Numeric);
+        if (string.IsNullOrWhiteSpace(mesStr) || !int.TryParse(mesStr, out int mes) || mes < 1 || mes > 12) return;
+
+        string anioStr = await DisplayPromptAsync("Consultar Informe", "Ingrese el año:", initialValue: DateTime.Today.Year.ToString(), keyboard: Keyboard.Numeric);
+        if (string.IsNullOrWhiteSpace(anioStr) || !int.TryParse(anioStr, out int anio)) return;
+
+        DateTime desde = new DateTime(anio, mes, 1);
+        DateTime hasta = desde.AddMonths(1).AddDays(-1);
+
+        // 2. Consultar registros
+        var registros = await _dbService.ObtenerRegistrosPorNineraYFechaAsync(_nineraSeleccionada.Id, desde, hasta);
+
+        if (registros == null || registros.Count == 0)
+        {
+            await DisplayAlert("Aviso", $"No hay registros cargados para {mes:D2}/{anio}.", "OK");
+            return;
+        }
+
+        // 3. Cálculos del período
+        double totalHoras = registros.Sum(r => r.HorasTrabajadas);
+        decimal totalAbonar = registros.Sum(r => (decimal)r.HorasTrabajadas * (r.ValorHoraAplicado > 0 ? r.ValorHoraAplicado : _nineraSeleccionada.ValorHora));
+
+        // 4. Pregunta A / B / C: Mostrar las opciones al usuario sin generar el PDF automáticamente
+        string accion = await DisplayActionSheet(
+            $"Informe: {_nineraSeleccionada.Nombre} ({mes:D2}/{anio})\nTotal: {totalHoras:F2} hs | ${totalAbonar:N2}",
+            "Cancelar",
+            null,
+            "Aceptar e ir a Pagos",
+            "Solo ver resumen",
+            "Generar y Compartir PDF");
+
+        switch (accion)
+        {
+            case "Aceptar e ir a Pagos":
+                await RegistrarLiquidacionAsync(mes, anio, totalHoras, totalAbonar);
+                // Opción de generar PDF tras aceptar
+                bool deseaPdf = await DisplayAlert("PDF", "¿Deseas generar y compartir el PDF de esta liquidación?", "Sí", "No");
+                if (deseaPdf)
+                {
+                    await EmitirYCompartirPdfAsync(registros, mes, anio);
+                }
+                await Shell.Current.GoToAsync("//PagosPage");
+                break;
+
+            case "Solo ver resumen":
+                await DisplayAlert("Resumen del Período",
+                    $"Niñera: {_nineraSeleccionada.Nombre}\n" +
+                    $"Período: {mes:D2}/{anio}\n" +
+                    $"Horas Trabajadas: {totalHoras:F2} hs\n" +
+                    $"Monto Estimado: ${totalAbonar:N2}", "Entendido");
+                break;
+
+            case "Generar y Compartir PDF":
+                await EmitirYCompartirPdfAsync(registros, mes, anio);
+                break;
+        }
+    }
+
+    // Métodos auxiliares limpios
+    private async Task RegistrarLiquidacionAsync(int mes, int anio, double totalHoras, decimal totalAbonar)
+    {
+        var pagoExistente = await _dbService.ObtenerPagoPorMesAnioAsync(_nineraSeleccionada.Id, mes, anio);
+        var pago = pagoExistente ?? new Pago();
+
+        pago.NineraId = _nineraSeleccionada.Id;
+        pago.Mes = mes;
+        pago.Anio = anio;
+        pago.TotalHoras = totalHoras;
+        pago.TotalAbonar = totalAbonar;
+
+        if (pagoExistente == null)
+        {
+            pago.EstadoPago = false;
+            pago.FechaPago = null;
+        }
+
+        await _dbService.GuardarPagoAsync(pago);
+        await DisplayAlert("Éxito", $"Registro de liquidación guardado como 'PENDIENTE' para {mes:D2}/{anio}.", "OK");
+    }
+
+    private async Task EmitirYCompartirPdfAsync(List<RegistroHorario> registros, int mes, int anio)
+    {
+        try
+        {
+            string rutaFile = await PdfReportService.GenerarInformePDF(_nineraSeleccionada, registros, mes, anio);
+            await PdfReportService.CompartirArchivoAsync(rutaFile, $"Informe {_nineraSeleccionada.Nombre} {mes:D2}/{anio}");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Error", $"No se pudo emitir el documento: {ex.Message}", "OK");
+        }
+    }
+
+    /// <summary>
+    /// Despliega opciones para crear una nueva niñera, editar su nombre o modificar su tarifa.
+    /// </summary>
+    private async void OnGestionarNinerasClicked(object sender, EventArgs e)
+    {
+        if (_nineraSeleccionada != null)
+        {
+            string opcion = await DisplayActionSheet($"Gestión de Niñeras", "Cancelar", null,
+                $"Editar nombre ({_nineraSeleccionada.Nombre})",
+                $"Editar tarifa ($ {_nineraSeleccionada.ValorHora:F0})",
+                "+ Crear nueva niñera");
+
+            if (opcion == "+ Crear nueva niñera")
+            {
+                await CrearNuevaNinera();
+            }
+            else if (opcion == $"Editar nombre ({_nineraSeleccionada.Nombre})")
+            {
+                string nuevoNombre = await DisplayPromptAsync("Editar Nombre", "Ingrese el nuevo nombre:", initialValue: _nineraSeleccionada.Nombre);
+                if (!string.IsNullOrWhiteSpace(nuevoNombre))
+                {
+                    _nineraSeleccionada.Nombre = nuevoNombre;
+                    await _dbService.GuardarNineraAsync(_nineraSeleccionada);
+                    await CargarNineras();
+                }
+            }
+            else if (opcion == $"Editar tarifa ($ {_nineraSeleccionada.ValorHora:F0})")
+            {
+                string nuevaTarifaStr = await DisplayPromptAsync("Editar Tarifa", "Ingrese la nueva tarifa por hora:", initialValue: _nineraSeleccionada.ValorHora.ToString("F0"), keyboard: Keyboard.Numeric);
+                if (decimal.TryParse(nuevaTarifaStr, out decimal nuevaTarifa))
+                {
+                    _nineraSeleccionada.ValorHora = nuevaTarifa;
+                    TxtValorHora.Text = nuevaTarifa.ToString("F0");
+                    await _dbService.GuardarNineraAsync(_nineraSeleccionada);
+                    await DisplayAlert("Éxito", "Tarifa actualizada. Los registros futuros usarán este nuevo valor.", "OK");
+                }
+            }
+        }
+        else
+        {
+            await CrearNuevaNinera();
+        }
+    }
+
+    /// <summary>
+    /// Diálogo para dar de alta a una niñera nueva en la base de datos.
+    /// </summary>
+    private async Task CrearNuevaNinera()
+    {
+        string nombre = await DisplayPromptAsync("Nueva Niñera", "Ingrese el nombre de la niñera:");
+        if (string.IsNullOrWhiteSpace(nombre)) return;
+
+        string valorHoraStr = await DisplayPromptAsync("Tarifa por Hora", $"Ingrese el valor de la hora para {nombre}:", keyboard: Keyboard.Numeric);
+
+        if (decimal.TryParse(valorHoraStr, out decimal valorHora))
+        {
+            var nueva = new Ninera { Nombre = nombre, ValorHora = valorHora, Activa = true };
+            await _dbService.GuardarNineraAsync(nueva);
+            await CargarNineras();
+            await DisplayAlert("Éxito", "Niñera creada correctamente.", "OK");
+        }
+        else
+        {
+            await DisplayAlert("Error", "El valor ingresado no es válido.", "OK");
+        }
+    }
+
+    /// <summary>
+    /// Elimina un registro de horario seleccionado en la lista.
+    /// </summary>
+    private async void OnEliminarRegistroClicked(object sender, EventArgs e)
+    {
+        var button = sender as Button;
+        var registro = button?.CommandParameter as RegistroHorario;
+
+        if (registro != null)
+        {
+            bool confirmar = await DisplayAlert("Confirmar", "¿Desea eliminar este registro?", "Sí, eliminar", "No");
+            if (confirmar)
+            {
+                await _dbService.EliminarRegistroAsync(registro);
+                await CargarRegistrosMes();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carga los datos del registro seleccionado en el formulario superior para modificarlo.
+    /// </summary>
+    private async void OnEditarRegistroClicked(object sender, EventArgs e)
+    {
+        var button = sender as Button;
+        var registro = button?.CommandParameter as RegistroHorario;
+
+        if (registro != null)
+        {
+            DpFecha.Date = registro.Fecha;
+            ChkSoloComentario.IsChecked = registro.EsSoloComentario;
+            TxtComentario.Text = registro.Comentario;
+
+            if (registro.HoraIngreso.HasValue) TpHoraIngreso.Time = registro.HoraIngreso.Value;
+            if (registro.HoraEgreso.HasValue) TpHoraEgreso.Time = registro.HoraEgreso.Value;
+
+            await DisplayAlert("Editar", "Los datos se cargaron en el formulario. Modifíquelos y presione 'Guardar Registro'.", "OK");
+        }
+    }
+
+    /// <summary>
+    /// Construye y dibuja en pantalla el listado de tarjetas del mes con botones Editar y Borrar.
+    /// </summary>
+    private async Task CargarRegistrosMes()
+    {
+        if (_nineraSeleccionada == null) return;
+
+        DateTime fechaReferencia = DpFecha.Date ?? DateTime.Today;
+        DateTime desde = new DateTime(fechaReferencia.Year, fechaReferencia.Month, 1);
+        DateTime hasta = desde.AddMonths(1).AddDays(-1);
+
+        var registros = await _dbService.ObtenerRegistrosPorNineraYFechaAsync(_nineraSeleccionada.Id, desde, hasta);
+
+        ContainerRegistros.Children.Clear();
+
+        if (registros == null || registros.Count == 0)
+        {
+            ContainerRegistros.Children.Add(new Label
+            {
+                Text = "No hay registros cargados para este mes.",
+                TextColor = Colors.Gray,
+                FontAttributes = FontAttributes.Italic,
+                Margin = new Thickness(0, 5)
+            });
+            return;
+        }
+
+        foreach (var reg in registros)
+        {
+            var card = new Frame
+            {
+                Padding = new Thickness(10),
+                CornerRadius = 8,
+                HasShadow = false,
+                BorderColor = Colors.Gray,
+                BackgroundColor = Color.FromArgb("#1E1E1E")
+            };
+
+            var grid = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Star },
+                    new ColumnDefinition { Width = GridLength.Auto },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                },
+                ColumnSpacing = 8
+            };
+
+            var infoStack = new VerticalStackLayout();
+            infoStack.Children.Add(new Label
+            {
+                Text = reg.Fecha.ToString("dd/MM/yyyy"),
+                FontAttributes = FontAttributes.Bold,
+                FontSize = 14,
+                TextColor = Colors.White
+            });
+
+            string horarioTexto = reg.EsSoloComentario
+                ? "Solo comentario"
+                : $"Horario: {reg.HoraIngreso:hh\\:mm} a {reg.HoraEgreso:hh\\:mm}";
+
+            infoStack.Children.Add(new Label
+            {
+                Text = horarioTexto,
+                FontSize = 12,
+                TextColor = Colors.LightGray
+            });
+
+            if (!string.IsNullOrWhiteSpace(reg.Comentario))
+            {
+                infoStack.Children.Add(new Label
+                {
+                    Text = reg.Comentario,
+                    FontSize = 12,
+                    TextColor = Colors.Gray,
+                    FontAttributes = FontAttributes.Italic
+                });
+            }
+
+            var btnEditar = new Button
+            {
+                Text = "✏️ Editar",
+                BackgroundColor = Colors.DarkOrange,
+                TextColor = Colors.White,
+                FontSize = 12,
+                HeightRequest = 36,
+                Padding = new Thickness(8, 0),
+                CommandParameter = reg
+            };
+            btnEditar.Clicked += OnEditarRegistroClicked;
+
+            var btnBorrar = new Button
+            {
+                Text = "🗑️ Borrar",
+                BackgroundColor = Colors.DarkRed,
+                TextColor = Colors.White,
+                FontSize = 12,
+                HeightRequest = 36,
+                Padding = new Thickness(8, 0),
+                CommandParameter = reg
+            };
+            btnBorrar.Clicked += OnEliminarRegistroClicked;
+
+            Grid.SetColumn(infoStack, 0);
+            Grid.SetColumn(btnEditar, 1);
+            Grid.SetColumn(btnBorrar, 2);
+
+            grid.Children.Add(infoStack);
+            grid.Children.Add(btnEditar);
+            grid.Children.Add(btnBorrar);
+
+            card.Content = grid;
+            ContainerRegistros.Children.Add(card);
+        }
+    }
+
+    /// <summary>
+    /// Navega a la pantalla dedicada 'PagosPage' para consultar y gestionar las liquidaciones de la niñera.
+    /// </summary>
+    private async void OnVerPagosClicked(object sender, EventArgs e)
+    {
+        if (_nineraSeleccionada == null)
+        {
+            await DisplayAlert("Atención", "Por favor seleccione una niñera.", "OK");
+            return;
+        }
+
+        // Navega a la pantalla de pagos enviando el objeto niñera
+        await Navigation.PushAsync(new PagosPage(_nineraSeleccionada));
+    }
+    
+}

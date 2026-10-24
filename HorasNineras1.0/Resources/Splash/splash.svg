@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" width="500" height="200">
+  <!-- Título Principal en Blanco -->
+  <text x="50%" y="40%" 
+        dominant-baseline="middle" 
+        text-anchor="middle" 
+        font-family="Arial, sans-serif" 
+        font-size="63" 
+        font-weight="bold" 
+        fill="#FFFFFF">
+    JulioC# Inc.
+  </text>
+
+  <!-- Subtítulo en Blanco -->
+  <text x="50%" y="70%" 
+        dominant-baseline="middle" 
+        text-anchor="middle" 
+        font-family="Arial, sans-serif" 
+        font-size="50" 
+        fill="#FFFFFF">
+    Version 1.0 Iniciando.....
+  </text>
+</svg>

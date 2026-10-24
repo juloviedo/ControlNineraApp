@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HorasNiñeras1._0.MainPage"
+             Title="Control de Niñeras">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <!-- BARRA DE ACCIONES PRINCIPALES CON 3 BOTONES -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                <Button Grid.Column="0" 
+                        Text="+ Niñera" 
+                        Clicked="OnGestionarNinerasClicked" 
+                        BackgroundColor="DarkSlateGray" 
+                        TextColor="White"
+                        FontSize="12"
+                        FontAttributes="Bold"/>
+
+                <Button Grid.Column="1" 
+                        Text="Ver PDF" 
+                        Clicked="OnGenerarPdfClicked" 
+                        BackgroundColor="DarkGreen" 
+                        TextColor="White"
+                        FontSize="12"
+                        FontAttributes="Bold"/>
+
+                <Button Grid.Column="2" 
+                        Text="💳 Pagos" 
+                        Clicked="OnVerPagosClicked" 
+                        BackgroundColor="DarkBlue" 
+                        TextColor="White"
+                        FontSize="12"
+                        FontAttributes="Bold"/>
+            </Grid>
+
+            <BoxView HeightRequest="1" Color="Gray" Margin="0,5"/>
+
+            <!-- SELECCIÓN DE NIÑERA Y VALOR DE LA HORA -->
+            <Label Text="Seleccionar Niñera" FontSize="16" FontAttributes="Bold"/>
+            <Picker x:Name="PickerNinera" 
+                    Title="Elija una niñera"
+                    ItemDisplayBinding="{Binding Nombre}"
+                    SelectedIndexChanged="OnNineraSelected"/>
+
+            <Grid ColumnDefinitions="Auto, *" ColumnSpacing="10" VerticalOptions="Center">
+                <Label Grid.Column="0" Text="Valor Hora ($):" VerticalOptions="Center" FontAttributes="Bold"/>
+                <Entry Grid.Column="1" x:Name="TxtValorHora" Keyboard="Numeric" Placeholder="Ej: 3500"/>
+            </Grid>
+
+            <BoxView HeightRequest="1" Color="Gray" Margin="0,5"/>
+
+            <!-- REGISTRO DE DÍA Y HORARIOS -->
+            <Label Text="Registro de Horario" FontSize="18" FontAttributes="Bold" TextColor="Navy"/>
+
+            <DatePicker x:Name="DpFecha" Format="dd/MM/yyyy"/>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0">
+                    <Label Text="Hora Ingreso"/>
+                    <TimePicker x:Name="TpHoraIngreso" Format="HH:mm"/>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1">
+                    <Label Text="Hora Egreso"/>
+                    <TimePicker x:Name="TpHoraEgreso" Format="HH:mm"/>
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- OPCIÓN DE NOTA / COMENTARIO -->
+            <HorizontalStackLayout Spacing="10">
+                <CheckBox x:Name="ChkSoloComentario" CheckedChanged="OnSoloComentarioChanged"/>
+                <Label Text="Registrar solo comentario (sin horas)" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+
+            <Entry x:Name="TxtComentario" Placeholder="Comentario u observación (ej. 21/07 Feriado)"/>
+
+            <Button Text="Guardar Registro" 
+                    Clicked="OnGuardarRegistroClicked" 
+                    BackgroundColor="DarkBlue" 
+                    TextColor="White" 
+                    CornerRadius="8"
+                    HeightRequest="50"
+                    FontAttributes="Bold"/>
+
+            <BoxView HeightRequest="1" Color="Gray" Margin="0,10"/>
+
+            <!-- CONTENEDOR DINÁMICO DE REGISTROS CON BOTONES EDITAR / BORRAR -->
+            <Label Text="Registros del Mes / Histórico" FontSize="16" FontAttributes="Bold" TextColor="Navy" Margin="0,10,0,0"/>
+
+            <VerticalStackLayout x:Name="ContainerRegistros" Spacing="8">
+                <!-- Se cargará dinámicamente desde el código C# -->
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
